@@ -1,70 +1,42 @@
 defmodule Stash.ETS do
-  defmodule Main do
-    use GenServer
-
-    defstruct [:ets, :opts]
-
-    def start_link(opts) do
-      GenServer.start_link(__MODULE__, opts, name: name(opts))
-    end
-
-    def put(key, data, opts) do
-      GenServer.call(name(opts), {:put, key, data})
-    end
-
-    ## Callbacks
-
-    def init(opts) do
-      ets = :ets.new(opts[:mod], [:set, :public, :named_table])
-      {:ok, %__MODULE__{ets: ets, opts: opts}}
-    end
-
-    def handle_call({:put, key, data}, _from, state) do
-      :ets.insert(state.ets, {key, data})
-      {:reply, :ok, state}
-    end
-
-    ## Helpers
-
-    def name(opts), do: :"#{opts[:mod]}.#{__MODULE__}"
-  end
-
   @behaviour Stash.Stage
 
-  def child_spec(opts) do
-    %{
-      id: Stash.ETS.Main.name(opts),
-      start: {Stash.ETS.Main, :start_link, [opts]}
-    }
+  def start_link(sid, opts \\ []) do
+    {ttl, opts} = Keyword.pop(opts, :ttl, :infinity)
+
+    opts = [name: sid] ++ ttl_opts(ttl) ++ opts
+    ConCache.start_link(opts)
   end
 
-  def get(scope, id, opts) do
-    mod = Keyword.fetch!(opts, :mod)
-    key = {mod.scope(scope), id}
+  def child_spec(opts) do
+    {sid, opts} = Keyword.pop!(opts, :sid)
+    %{id: sid, start: {__MODULE__, :start_link, [sid, opts]}}
+  end
 
-    case :ets.lookup(mod, key) do
-      [] -> {:error, :not_found}
-      [{^key, data}] -> {:ok, data}
+  defp ttl_opts(:infinity), do: [ttl_check_interval: false]
+  defp ttl_opts(ttl), do: [global_ttl: ttl, ttl_check_interval: :timer.seconds(5)]
+
+  def get(sid, scope, id) do
+    key = Stash.key(scope, id)
+
+    case ConCache.get(sid, key) do
+      nil -> {:error, :not_found}
+      data -> {:ok, data}
     end
   end
 
-  def put(scope, id, data, opts) do
-    mod = Keyword.fetch!(opts, :mod)
-    key = {mod.scope(scope), id}
-    Main.put(key, data, opts)
+  def put(sid, scope, id, data) do
+    key = Stash.key(scope, id)
+    ConCache.put(sid, key, data)
   end
 
-  def get_many(scope, ids, opts) do
-    for id <- ids, do: get(scope, id, opts)
+  def get_many(sid, scope, ids) do
+    for id <- ids, do: get(sid, scope, id)
   end
 
-  def put_many(scope, entries, opts) do
-    mod = Keyword.fetch!(opts, :mod)
-    sc = mod.scope(scope)
-
+  def put_many(sid, scope, entries) do
     for {id, data} <- entries do
-      key = {sc, id}
-      Main.put(key, data, opts)
+      put(sid, scope, id, data)
     end
 
     :ok

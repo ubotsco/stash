@@ -4,20 +4,17 @@ Multi-level caches
 
 ## Installation
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `stash` to your list of dependencies in `mix.exs`:
-
 ```elixir
 def deps do
   [
-    {:stash, "~> 0.1.0"}
+    {:stash, github: "ubotsxyz/stash"}
   ]
 end
 ```
 
 ## Usage
 
-```ex
+```elixir
 # User stash, backed by API
 defmodule MyApp.UserStash do
   defmodule Source do
@@ -36,7 +33,7 @@ defmodule MyApp.UserStash do
 end
 ```
 
-```ex
+```elixir
 # Session stash
 defmodule MyApp.SessionStash do
   use Stash,
@@ -48,7 +45,7 @@ defmodule MyApp.SessionStash do
 end
 ```
 
-```ex
+```elixir
 # Start both in you application
 defmodule MyApp do
   use Application
