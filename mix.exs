@@ -20,7 +20,7 @@ defmodule Stash.MixProject do
   defp deps do
     [
       {:redix, "~> 1.0"},
-      {:con_cache, "~> 0.13"},
+      {:con_cache, "~> 1.0"},
 
       # Dev & Test
       {:dialyxir, "~> 1.0", only: :dev, runtime: false}
