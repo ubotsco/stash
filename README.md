@@ -17,16 +17,16 @@ end
 ```elixir
 # User stash, backed by API
 defmodule MyApp.UserStash do
-  defmodule Source do
+  defmodule MyApiSource do
     use Stash.Source
     def get(_ctx, id, _opts), do: MyAPI.get(ctx, id)
   end
 
   use Stash,
     stages: [
-      Stash.ETS,
-      {Stash.Redis, [redis_url: "redis://localhost:6379"]},
-      Source
+      local: {Stash.ETS, []},
+      shared: {Stash.Redis, [redis_url: "redis://localhost:6379"]},
+      api: {MyApiSource, []}
     ]
 
   def scope(ctx), do: ctx.team_id
@@ -38,7 +38,7 @@ end
 defmodule MyApp.SessionStash do
   use Stash,
     stages: [
-      {Stash.Redis, [redis_url: "redis://localhost:6379"]}
+      redis: {Stash.Redis, [redis_url: "redis://localhost:6379"]}
     ]
 
   def scope(ctx), do: ctx.user_id
