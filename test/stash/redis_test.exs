@@ -3,7 +3,7 @@ defmodule Stash.RedisTest do
 
   setup tags do
     sid = :"#{tags.describe}_#{tags.test}"
-    start_supervised!({Stash.Redis, [sid: sid, redis_url: "redis://localhost:6379/3"]})
+    start_supervised!({Stash.Redis, [sid: sid, redis_url: "redis://localhost:6379/2"]})
     {:ok, sid: sid}
   end
 
@@ -13,7 +13,7 @@ defmodule Stash.RedisTest do
 
   describe "put/4" do
     test "it saves simple value in Redis", %{sid: sid} do
-      assert :ok = Stash.Redis.put(sid, "users", "u1", "Hodor")
+      assert :ok = Stash.Redis.put(sid, "users", "u1", "Hodor", [])
       assert {:ok, data} = Stash.Redis.get(sid, "users", "u1")
       assert data == "Hodor"
     end
@@ -21,7 +21,7 @@ defmodule Stash.RedisTest do
     test "it saves complex value in Redis", %{sid: sid} do
       user = %User{id: 1, name: "Hodor"}
 
-      assert :ok = Stash.Redis.put(sid, "users", "u1", user)
+      assert :ok = Stash.Redis.put(sid, "users", "u1", user, [])
       assert {:ok, user} == Stash.Redis.get(sid, "users", "u1")
     end
 
@@ -32,7 +32,7 @@ defmodule Stash.RedisTest do
 
   describe "get/3" do
     test "it returns nil if saved value is nil", %{sid: sid} do
-      assert :ok = Stash.Redis.put(sid, "users", "u1", nil)
+      assert :ok = Stash.Redis.put(sid, "users", "u1", nil, [])
       assert {:ok, nil} == Stash.Redis.get(sid, "users", "u1")
     end
 
@@ -45,15 +45,20 @@ defmodule Stash.RedisTest do
 
   describe "put_many/3" do
     test "it handles empty list", %{sid: sid} do
-      assert :ok == Stash.Redis.put_many(sid, "users", [])
+      assert :ok == Stash.Redis.put_many(sid, "users", [], [])
     end
 
     test "it saves multiple entries", %{sid: sid} do
       assert :ok ==
-               Stash.Redis.put_many(sid, "users", [
-                 {"u1", "Alice"},
-                 {"u2", "Bob"}
-               ])
+               Stash.Redis.put_many(
+                 sid,
+                 "users",
+                 [
+                   {"u1", "Alice"},
+                   {"u2", "Bob"}
+                 ],
+                 []
+               )
 
       assert {:ok, "Alice"} == Stash.Redis.get(sid, "users", "u1")
       assert {:ok, "Bob"} == Stash.Redis.get(sid, "users", "u2")
@@ -66,9 +71,9 @@ defmodule Stash.RedisTest do
     end
 
     test "it keeps the order", %{sid: sid} do
-      :ok = Stash.Redis.put(sid, "users", "a", "Alice")
-      :ok = Stash.Redis.put(sid, "users", "c", "Charlie")
-      :ok = Stash.Redis.put(sid, "users", "b", "Bob")
+      :ok = Stash.Redis.put(sid, "users", "a", "Alice", [])
+      :ok = Stash.Redis.put(sid, "users", "c", "Charlie", [])
+      :ok = Stash.Redis.put(sid, "users", "b", "Bob", [])
 
       assert [
                {:ok, "Alice"},
@@ -78,8 +83,8 @@ defmodule Stash.RedisTest do
     end
 
     test "it handles missing values", %{sid: sid} do
-      :ok = Stash.Redis.put(sid, "users", "a", "Alice")
-      :ok = Stash.Redis.put(sid, "users", "c", "Charlie")
+      :ok = Stash.Redis.put(sid, "users", "a", "Alice", [])
+      :ok = Stash.Redis.put(sid, "users", "c", "Charlie", [])
 
       assert [
                {:ok, "Alice"},
@@ -96,9 +101,9 @@ defmodule Stash.RedisTest do
     end
 
     test "small stream", %{sid: sid} do
-      :ok = Stash.Redis.put(sid, "small", "a", "Alice")
-      :ok = Stash.Redis.put(sid, "small", "b", "Bob")
-      :ok = Stash.Redis.put(sid, "small", "c", "Charlie")
+      :ok = Stash.Redis.put(sid, "small", "a", "Alice", [])
+      :ok = Stash.Redis.put(sid, "small", "b", "Bob", [])
+      :ok = Stash.Redis.put(sid, "small", "c", "Charlie", [])
       stream = Stash.Redis.stream(sid, "small")
       assert Enum.count(stream) == 3
     end
@@ -106,7 +111,7 @@ defmodule Stash.RedisTest do
     test "big stream", %{sid: sid} do
       for i <- 1..5 do
         entries = Enum.map(1..100, fn j -> {"#{i}-#{j}", "Alice"} end)
-        :ok = Stash.Redis.put_many(sid, "big", entries)
+        :ok = Stash.Redis.put_many(sid, "big", entries, [])
       end
 
       stream = Stash.Redis.stream(sid, "big")
@@ -115,7 +120,7 @@ defmodule Stash.RedisTest do
   end
 
   # describe "clear_all!" do
-  #   test "it clears all cachens keys" do
+  #   test "it clears all cache keys" do
   #   test "it works when called on empty collection" do
   # end
 end

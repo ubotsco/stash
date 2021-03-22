@@ -27,7 +27,7 @@ defmodule StashTest do
       end
     end
 
-    def put(sid, scope, id, data) do
+    def put(sid, scope, id, data, _opts) do
       Agent.update(sid, fn map -> Map.put(map, {scope, id}, data) end)
       send(self(), {:put, sid, {scope, id}, data})
       :ok
@@ -39,7 +39,7 @@ defmodule StashTest do
       hits
     end
 
-    def put_many(sid, scope, entries) do
+    def put_many(sid, scope, entries, _opts) do
       Agent.update(sid, fn map ->
         Enum.reduce(entries, map, fn {id, data}, map ->
           Map.put(map, {scope, id}, data)
@@ -49,22 +49,24 @@ defmodule StashTest do
       send(self(), {:put_many, sid, entries})
       :ok
     end
+
+    def clear_all(_sid), do: :ok
   end
 
   defmodule SimpleStash do
     use Stash,
       stages: [
-        FakeStage,
-        FakeStage,
-        FakeStage
+        one: {FakeStage, []},
+        two: {FakeStage, []},
+        three: {FakeStage, []}
       ]
 
     def scope(ctx), do: ctx.team_id
   end
 
-  @s0 :"#{SimpleStash}.0"
-  @s1 :"#{SimpleStash}.1"
-  @s2 :"#{SimpleStash}.2"
+  @s1 :"#{SimpleStash}.one"
+  @s2 :"#{SimpleStash}.two"
+  @s3 :"#{SimpleStash}.three"
 
   setup do
     start_supervised!(SimpleStash)
@@ -78,9 +80,9 @@ defmodule StashTest do
       assert Process.whereis(SimpleStash)
       assert %{active: 3} = Supervisor.count_children(SimpleStash)
 
-      assert Process.whereis(@s0)
       assert Process.whereis(@s1)
       assert Process.whereis(@s2)
+      assert Process.whereis(@s3)
 
       refute Process.whereis(:"#{SimpleStash}.3")
     end
@@ -89,50 +91,50 @@ defmodule StashTest do
   describe "get" do
     test "miss all stages", %{ctx: ctx} do
       assert {:error, :not_found} == SimpleStash.get(ctx, "x")
-      assert_received {:get, @s0, :miss, _}
       assert_received {:get, @s1, :miss, _}
       assert_received {:get, @s2, :miss, _}
+      assert_received {:get, @s3, :miss, _}
     end
 
     test "hit in first stage", %{ctx: ctx} do
-      FakeStage.put(@s0, "TEAM1", "x", "hello")
+      FakeStage.put(@s1, "TEAM1", "x", "hello", [])
 
       assert {:ok, "hello"} == SimpleStash.get(ctx, "x")
-      assert_received {:get, @s0, :hit, _}
+      assert_received {:get, @s1, :hit, _}
 
-      refute_received {:get, @s1, _, _}
       refute_received {:get, @s2, _, _}
+      refute_received {:get, @s3, _, _}
     end
 
     test "hit in second stage", %{ctx: ctx} do
-      FakeStage.put(@s1, "TEAM1", "x", "hello")
+      FakeStage.put(@s2, "TEAM1", "x", "hello", [])
 
       assert {:ok, "hello"} == SimpleStash.get(ctx, "x")
-      assert_received {:get, @s0, :miss, _}
-      assert_received {:get, @s1, :hit, _}
-      assert_received {:put, @s0, _, _}
-
-      refute_received {:get, @s2, _, _}
-    end
-
-    test "hit in last stage", %{ctx: ctx} do
-      FakeStage.put(@s2, "TEAM1", "x", "hello")
-
-      assert {:ok, "hello"} == SimpleStash.get(ctx, "x")
-      assert_received {:get, @s0, :miss, _}
       assert_received {:get, @s1, :miss, _}
       assert_received {:get, @s2, :hit, _}
       assert_received {:put, @s1, _, _}
-      assert_received {:put, @s0, _, _}
+
+      refute_received {:get, @s3, _, _}
+    end
+
+    test "hit in last stage", %{ctx: ctx} do
+      FakeStage.put(@s3, "TEAM1", "x", "hello", [])
+
+      assert {:ok, "hello"} == SimpleStash.get(ctx, "x")
+      assert_received {:get, @s1, :miss, _}
+      assert_received {:get, @s2, :miss, _}
+      assert_received {:get, @s3, :hit, _}
+      assert_received {:put, @s2, _, _}
+      assert_received {:put, @s1, _, _}
     end
   end
 
   describe "put" do
     test "put in all stages", %{ctx: ctx} do
       assert :ok == SimpleStash.put(ctx, "x", "hello")
-      assert_received {:put, @s0, _, _}
       assert_received {:put, @s1, _, _}
       assert_received {:put, @s2, _, _}
+      assert_received {:put, @s3, _, _}
     end
   end
 
@@ -140,9 +142,9 @@ defmodule StashTest do
     test "miss in all stages", %{ctx: ctx} do
       SimpleStash.load(ctx, ["x", "y", "z"])
 
-      assert_received {:get_many, @s0, _, _}
       assert_received {:get_many, @s1, _, _}
       assert_received {:get_many, @s2, _, _}
+      assert_received {:get_many, @s3, _, _}
 
       assert {:error, _} = SimpleStash.get(ctx, "x")
       assert {:error, _} = SimpleStash.get(ctx, "y")
@@ -150,15 +152,15 @@ defmodule StashTest do
     end
 
     test "hit in last stage for one", %{ctx: ctx} do
-      FakeStage.put(@s2, "TEAM1", "x", "hello")
+      FakeStage.put(@s3, "TEAM1", "x", "hello", [])
       SimpleStash.load(ctx, ["x", "y", "z"])
 
-      assert_received {:get_many, @s0, ["x", "y", "z"], _}
       assert_received {:get_many, @s1, ["x", "y", "z"], _}
       assert_received {:get_many, @s2, ["x", "y", "z"], _}
+      assert_received {:get_many, @s3, ["x", "y", "z"], _}
 
+      assert_received {:put_many, @s2, [{"x", "hello"}]}
       assert_received {:put_many, @s1, [{"x", "hello"}]}
-      assert_received {:put_many, @s0, [{"x", "hello"}]}
 
       assert {:ok, "hello"} = SimpleStash.get(ctx, "x")
       assert {:error, _} = SimpleStash.get(ctx, "y")
@@ -166,18 +168,18 @@ defmodule StashTest do
     end
 
     test "hit one in each stage", %{ctx: ctx} do
-      FakeStage.put(@s0, "TEAM1", "x", "hello")
-      FakeStage.put(@s1, "TEAM1", "y", "world")
-      FakeStage.put(@s2, "TEAM1", "z", "today")
+      FakeStage.put(@s1, "TEAM1", "x", "hello", [])
+      FakeStage.put(@s2, "TEAM1", "y", "world", [])
+      FakeStage.put(@s3, "TEAM1", "z", "today", [])
 
       SimpleStash.load(ctx, ["x", "y", "z"])
 
-      assert_received {:get_many, @s0, ["x", "y", "z"], _}
-      assert_received {:get_many, @s1, ["y", "z"], _}
-      assert_received {:get_many, @s2, ["z"], _}
+      assert_received {:get_many, @s1, ["x", "y", "z"], _}
+      assert_received {:get_many, @s2, ["y", "z"], _}
+      assert_received {:get_many, @s3, ["z"], _}
 
-      assert_received {:put_many, @s1, [{"z", "today"}]}
-      assert_received {:put_many, @s0, [{"y", "world"}, {"z", "today"}]}
+      assert_received {:put_many, @s2, [{"z", "today"}]}
+      assert_received {:put_many, @s1, [{"y", "world"}, {"z", "today"}]}
 
       flush()
 
@@ -185,11 +187,11 @@ defmodule StashTest do
       assert {:ok, "world"} = SimpleStash.get(ctx, "y")
       assert {:ok, "today"} = SimpleStash.get(ctx, "z")
 
-      assert_received {:get, @s0, :hit, {_, "x"}}
-      assert_received {:get, @s0, :hit, {_, "y"}}
-      assert_received {:get, @s0, :hit, {_, "z"}}
-      refute_received {:get, @s1, _, _}
+      assert_received {:get, @s1, :hit, {_, "x"}}
+      assert_received {:get, @s1, :hit, {_, "y"}}
+      assert_received {:get, @s1, :hit, {_, "z"}}
       refute_received {:get, @s2, _, _}
+      refute_received {:get, @s3, _, _}
     end
   end
 

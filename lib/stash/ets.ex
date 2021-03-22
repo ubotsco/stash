@@ -25,7 +25,7 @@ defmodule Stash.ETS do
     end
   end
 
-  def put(sid, scope, id, data) do
+  def put(sid, scope, id, data, _opts) do
     key = Stash.key(scope, id)
     ConCache.put(sid, key, data)
   end
@@ -34,11 +34,13 @@ defmodule Stash.ETS do
     for id <- ids, do: get(sid, scope, id)
   end
 
-  def put_many(sid, scope, entries) do
+  def put_many(sid, scope, entries, opts) do
     for {id, data} <- entries do
-      put(sid, scope, id, data)
+      put(sid, scope, id, data, opts)
     end
 
     :ok
   end
+
+  def clear_all(_sid), do: :ok
 end

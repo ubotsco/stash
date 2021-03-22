@@ -13,7 +13,7 @@ defmodule Stash.ETSTest do
 
   describe "put/4" do
     test "it saves simple value", %{sid: sid} do
-      assert :ok = Stash.ETS.put(sid, "users", "u1", "Hodor")
+      assert :ok = Stash.ETS.put(sid, "users", "u1", "Hodor", [])
       assert {:ok, data} = Stash.ETS.get(sid, "users", "u1")
       assert data == "Hodor"
     end
@@ -21,7 +21,7 @@ defmodule Stash.ETSTest do
     test "it saves complex value", %{sid: sid} do
       user = %User{id: 1, name: "Hodor"}
 
-      assert :ok = Stash.ETS.put(sid, "users", "u1", user)
+      assert :ok = Stash.ETS.put(sid, "users", "u1", user, [])
       assert {:ok, user} == Stash.ETS.get(sid, "users", "u1")
     end
 
@@ -32,7 +32,7 @@ defmodule Stash.ETSTest do
 
   describe "get/3" do
     # test "it returns nil if saved value is nil", %{sid: sid} do
-    #   assert :ok = Stash.ETS.put(sid, "users", "u1", nil)
+    #   assert :ok = Stash.ETS.put(sid, "users", "u1", nil, [])
     #   assert {:ok, nil} == Stash.ETS.get(sid, "users", "u1")
     # end
 
@@ -45,15 +45,20 @@ defmodule Stash.ETSTest do
 
   describe "put_many/3" do
     test "it handles empty list", %{sid: sid} do
-      assert :ok == Stash.ETS.put_many(sid, "users", [])
+      assert :ok == Stash.ETS.put_many(sid, "users", [], [])
     end
 
     test "it saves multiple entries", %{sid: sid} do
       assert :ok ==
-               Stash.ETS.put_many(sid, "users", [
-                 {"u1", "Alice"},
-                 {"u2", "Bob"}
-               ])
+               Stash.ETS.put_many(
+                 sid,
+                 "users",
+                 [
+                   {"u1", "Alice"},
+                   {"u2", "Bob"}
+                 ],
+                 []
+               )
 
       assert {:ok, "Alice"} == Stash.ETS.get(sid, "users", "u1")
       assert {:ok, "Bob"} == Stash.ETS.get(sid, "users", "u2")
@@ -66,9 +71,9 @@ defmodule Stash.ETSTest do
     end
 
     test "it keeps the order", %{sid: sid} do
-      :ok = Stash.ETS.put(sid, "users", "a", "Alice")
-      :ok = Stash.ETS.put(sid, "users", "c", "Charlie")
-      :ok = Stash.ETS.put(sid, "users", "b", "Bob")
+      :ok = Stash.ETS.put(sid, "users", "a", "Alice", [])
+      :ok = Stash.ETS.put(sid, "users", "c", "Charlie", [])
+      :ok = Stash.ETS.put(sid, "users", "b", "Bob", [])
 
       assert [
                {:ok, "Alice"},
@@ -78,8 +83,8 @@ defmodule Stash.ETSTest do
     end
 
     test "it handles missing values", %{sid: sid} do
-      :ok = Stash.ETS.put(sid, "users", "a", "Alice")
-      :ok = Stash.ETS.put(sid, "users", "c", "Charlie")
+      :ok = Stash.ETS.put(sid, "users", "a", "Alice", [])
+      :ok = Stash.ETS.put(sid, "users", "c", "Charlie", [])
 
       assert [
                {:ok, "Alice"},
@@ -90,7 +95,7 @@ defmodule Stash.ETSTest do
   end
 
   # describe "clear_all!" do
-  #   test "it clears all cachens keys"
+  #   test "it clears all cache keys"
   #   test "it works when called on empty collection"
   # end
 end

@@ -4,14 +4,17 @@ defmodule Stash.Redis do
 
     def start_link(sid, ttl), do: GenServer.start_link(__MODULE__, {sid, ttl}, name: name(sid))
 
-    def expire(sid, key), do: GenServer.cast(name(sid), {:expire, key})
+    def expire(sid, key, opts) do
+      ttl = Keyword.get(opts, :ttl)
+      GenServer.cast(name(sid), {:expire, key, ttl})
+    end
 
     def init({sid, ttl}) do
       {:ok, %{sid: sid, ttl: ttl}}
     end
 
-    def handle_cast({:expire, key}, %{sid: sid, ttl: ttl} = state) do
-      do_expire(sid, key, ttl)
+    def handle_cast({:expire, key, local_ttl}, %{sid: sid, ttl: global_ttl} = state) do
+      do_expire(sid, key, local_ttl || global_ttl)
       {:noreply, state}
     end
 
@@ -102,12 +105,12 @@ defmodule Stash.Redis do
     end
   end
 
-  def put(sid, scope, id, data) do
+  def put(sid, scope, id, data, opts) do
     key = key(sid, scope, id)
 
     case command(sid, ["SET", key, :erlang.term_to_binary(data)]) do
       {:ok, _} ->
-        Expirer.expire(sid, key)
+        Expirer.expire(sid, key, opts)
         :ok
 
       {:error, err} ->
@@ -120,6 +123,27 @@ defmodule Stash.Redis do
   def get_many(sid, scope, ids) do
     keys = Enum.map(ids, &key(sid, scope, &1))
     mget(sid, keys)
+  end
+
+  def put_many(_sid, _scope, [], _opts), do: :ok
+
+  def put_many(sid, scope, entries, opts) do
+    data =
+      Enum.map(entries, fn {id, data} ->
+        [key(sid, scope, id), :erlang.term_to_binary(data)]
+      end)
+
+    args = List.flatten(data)
+
+    case command(sid, ["MSET" | args]) do
+      {:ok, _} ->
+        keys = Enum.map(data, fn [k, _] -> k end)
+        Expirer.expire(sid, keys, opts)
+        :ok
+
+      {:error, err} ->
+        {:error, err}
+    end
   end
 
   def stream(sid, scope) do
@@ -137,26 +161,23 @@ defmodule Stash.Redis do
         end
     end)
     |> Stream.flat_map(fn users -> users end)
+    |> Stream.filter(&match?({:ok, _}, &1))
+    |> Stream.map(&elem(&1, 1))
   end
 
-  def put_many(_sid, _scope, []), do: :ok
-
-  def put_many(sid, scope, entries) do
-    data =
-      Enum.map(entries, fn {id, data} ->
-        [key(sid, scope, id), :erlang.term_to_binary(data)]
-      end)
-
-    args = List.flatten(data)
-
-    case command(sid, ["MSET" | args]) do
-      {:ok, _} ->
-        keys = Enum.map(data, fn [k, _] -> k end)
-        Expirer.expire(sid, keys)
+  def clear_all(sid) do
+    case command(sid, ["KEYS", "#{sid}:*"]) do
+      {:ok, []} ->
         :ok
 
-      {:error, err} ->
-        {:error, err}
+      {:ok, keys} ->
+        case command(sid, ["DEL" | keys]) do
+          {:ok, _} -> :ok
+          error -> error
+        end
+
+      error ->
+        error
     end
   end
 
