@@ -42,5 +42,9 @@ defmodule Stash.ETS do
     :ok
   end
 
-  def clear_all(_sid), do: :ok
+  def clear_all(sid) do
+    ets = ConCache.ets(sid)
+    true = :ets.delete_all_objects(ets)
+    :ok
+  end
 end
