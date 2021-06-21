@@ -156,6 +156,8 @@ defmodule Stash.Source do
       def get_many(sid, scope, ids), do: Enum.map(ids, &get(sid, scope, &1))
       def put(_sid, _scope, _id, _data, _opts), do: :ok
       def put_many(_sid, _scope, _entries, _opts), do: :ok
+      def delete(_sid, _scope, _id), do: :ok
+      def delete_all(_sid, _scope), do: :ok
       def clear_all(_sid), do: :ok
 
       defoverridable get_many: 3
