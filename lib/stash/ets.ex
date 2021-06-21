@@ -42,6 +42,23 @@ defmodule Stash.ETS do
     :ok
   end
 
+  def delete(sid, scope, id) do
+    key = Stash.key(scope, id)
+    ConCache.delete(sid, key)
+  end
+
+  def delete_all(sid, scope) do
+    ets = ConCache.ets(sid)
+    {prefix, _} = Stash.key(scope, nil)
+    ids = :ets.select(ets, [{{{prefix, :"$1"}, :_}, [], [:"$$"]}])
+
+    for [id] <- ids do
+      :ok = ConCache.delete(sid, Stash.key(scope, id))
+    end
+
+    :ok
+  end
+
   def clear_all(sid) do
     ets = ConCache.ets(sid)
     true = :ets.delete_all_objects(ets)

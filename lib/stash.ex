@@ -9,6 +9,8 @@ defmodule Stash do
       def get(ctx, id), do: Stash.get(__MODULE__, ctx, id)
       def put(ctx, id, data, opts \\ []), do: Stash.put(__MODULE__, ctx, id, data, opts)
       def put_many(ctx, entries, opts \\ []), do: Stash.put_many(__MODULE__, ctx, entries, opts)
+      def delete(ctx, id), do: Stash.delete(__MODULE__, ctx, id)
+      def delete_all(ctx), do: Stash.delete_all(__MODULE__, ctx)
       def load(ctx, ids) when is_list(ids), do: Stash.load(__MODULE__, ctx, ids)
       def stream(ctx, from: from), do: Stash.stream(__MODULE__, ctx, from)
       def clear_all(), do: Stash.clear_all(__MODULE__)
@@ -73,6 +75,18 @@ defmodule Stash do
   def put_many(mod, scope, entries, opts) do
     scope = mod.scope(scope)
     for {stage, sid} <- stages(mod), do: stage.put_many(sid, scope, entries, opts)
+    :ok
+  end
+
+  def delete(mod, scope, id) do
+    scope = mod.scope(scope)
+    for {stage, sid} <- stages(mod), do: stage.delete(sid, scope, id)
+    :ok
+  end
+
+  def delete_all(mod, scope) do
+    scope = mod.scope(scope)
+    for {stage, sid} <- stages(mod), do: stage.delete_all(sid, scope)
     :ok
   end
 

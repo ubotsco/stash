@@ -165,6 +165,36 @@ defmodule Stash.Redis do
     |> Stream.map(&elem(&1, 1))
   end
 
+  def delete(sid, scope, id) do
+    key = key(sid, scope, id)
+
+    case command(sid, ["DEL", key]) do
+      {:ok, _} ->
+        :ok
+
+      {:error, err} ->
+        {:error, err}
+    end
+  end
+
+  def delete_all(sid, scope) do
+    key = key(sid, scope, "*")
+
+    case command(sid, ["KEYS", key]) do
+      {:ok, []} ->
+        :ok
+
+      {:ok, keys} ->
+        case command(sid, ["DEL" | keys]) do
+          {:ok, _} -> :ok
+          error -> error
+        end
+
+      error ->
+        error
+    end
+  end
+
   def clear_all(sid) do
     case command(sid, ["KEYS", "#{sid}:*"]) do
       {:ok, []} ->

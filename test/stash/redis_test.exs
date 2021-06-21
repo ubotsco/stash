@@ -94,6 +94,44 @@ defmodule Stash.RedisTest do
     end
   end
 
+  describe "delete/3" do
+    test "delete when empty", %{sid: sid} do
+      assert :ok == Stash.Redis.delete(sid, "users", "u1")
+      assert {:error, :not_found} == Stash.Redis.get(sid, "users", "u1")
+    end
+
+    test "delete only from given scope", %{sid: sid} do
+      assert :ok = Stash.Redis.put(sid, "users", "u1", "Alice", [])
+      assert :ok = Stash.Redis.put(sid, "users", "u2", "Bob", [])
+
+      assert :ok == Stash.Redis.delete(sid, "users", "u2")
+
+      assert {:ok, "Alice"} = Stash.Redis.get(sid, "users", "u1")
+      assert {:error, :not_found} = Stash.Redis.get(sid, "users", "u2")
+    end
+  end
+
+  describe "delete_all/2" do
+    test "delete when empty", %{sid: sid} do
+      assert :ok == Stash.Redis.delete_all(sid, "users")
+      assert {:error, :not_found} == Stash.Redis.get(sid, "users", "u1")
+    end
+
+    test "delete only from given scope", %{sid: sid} do
+      assert :ok = Stash.Redis.put(sid, "users", "u1", "Alice", [])
+      assert :ok = Stash.Redis.put(sid, "users", "u2", "Bob", [])
+      assert :ok = Stash.Redis.put(sid, "admins", "u1", "Admin Alice", [])
+      assert :ok = Stash.Redis.put(sid, "admins", "u2", "Admin Bob", [])
+
+      assert :ok == Stash.Redis.delete_all(sid, "users")
+
+      assert {:error, :not_found} = Stash.Redis.get(sid, "users", "u1")
+      assert {:error, :not_found} = Stash.Redis.get(sid, "users", "u2")
+      assert {:ok, "Admin Alice"} == Stash.Redis.get(sid, "admins", "u1")
+      assert {:ok, "Admin Bob"} == Stash.Redis.get(sid, "admins", "u2")
+    end
+  end
+
   describe "stream/2" do
     test "empty steam", %{sid: sid} do
       stream = Stash.Redis.stream(sid, "empty")

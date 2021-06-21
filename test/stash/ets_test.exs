@@ -43,7 +43,7 @@ defmodule Stash.ETSTest do
     # test "it returns nil if TTL expired"
   end
 
-  describe "put_many/3" do
+  describe "put_many/4" do
     test "it handles empty list", %{sid: sid} do
       assert :ok == Stash.ETS.put_many(sid, "users", [], [])
     end
@@ -91,6 +91,44 @@ defmodule Stash.ETSTest do
                {:error, :not_found},
                {:ok, "Charlie"}
              ] = Stash.ETS.get_many(sid, "users", ["a", "b", "c"])
+    end
+  end
+
+  describe "delete/3" do
+    test "delete when empty", %{sid: sid} do
+      assert :ok == Stash.ETS.delete(sid, "users", "u1")
+      assert {:error, :not_found} == Stash.ETS.get(sid, "users", "u1")
+    end
+
+    test "delete only from given scope", %{sid: sid} do
+      assert :ok = Stash.ETS.put(sid, "users", "u1", "Alice", [])
+      assert :ok = Stash.ETS.put(sid, "users", "u2", "Bob", [])
+
+      assert :ok == Stash.ETS.delete(sid, "users", "u2")
+
+      assert {:ok, "Alice"} = Stash.ETS.get(sid, "users", "u1")
+      assert {:error, :not_found} = Stash.ETS.get(sid, "users", "u2")
+    end
+  end
+
+  describe "delete_all/2" do
+    test "delete when empty", %{sid: sid} do
+      assert :ok == Stash.ETS.delete_all(sid, "users")
+      assert {:error, :not_found} == Stash.ETS.get(sid, "users", "u1")
+    end
+
+    test "delete only from given scope", %{sid: sid} do
+      assert :ok = Stash.ETS.put(sid, "users", "u1", "Alice", [])
+      assert :ok = Stash.ETS.put(sid, "users", "u2", "Bob", [])
+      assert :ok = Stash.ETS.put(sid, "admins", "u1", "Admin Alice", [])
+      assert :ok = Stash.ETS.put(sid, "admins", "u2", "Admin Bob", [])
+
+      assert :ok == Stash.ETS.delete_all(sid, "users")
+
+      assert {:error, :not_found} = Stash.ETS.get(sid, "users", "u1")
+      assert {:error, :not_found} = Stash.ETS.get(sid, "users", "u2")
+      assert {:ok, "Admin Alice"} == Stash.ETS.get(sid, "admins", "u1")
+      assert {:ok, "Admin Bob"} == Stash.ETS.get(sid, "admins", "u2")
     end
   end
 
